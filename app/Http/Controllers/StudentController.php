@@ -12,6 +12,16 @@ class StudentController extends Controller
 {
   
     public function createStudents(Request $request){
+      $studentEmail=$request->email;
+       $checkStudent=Student::where('email',$studentEmail)->first();
+       if($checkStudent){
+               return response()->json([
+    'warning' => 'You have already registered, Please login to proceed!!',
+],400);
+
+       }
+
+
     	 $newStudent = new Student();
        $newStudent->name  = $request->name;
        $newStudent->gender  = $request->gender;
