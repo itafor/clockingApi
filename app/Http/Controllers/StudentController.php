@@ -20,8 +20,6 @@ class StudentController extends Controller
 ],400);
 
        }
-
-
     	 $newStudent = new Student();
        $newStudent->name  = $request->name;
        $newStudent->gender  = $request->gender;
@@ -39,7 +37,7 @@ class StudentController extends Controller
     public function fetchStudent($id){
       $student = Student::join('clocks','students.id','=','clocks.studentId')
       ->selectRaw('students.name as fullName, students.gender as Gender,students.email as Email,
-      clocks.timeIn as TimeIn, clocks.timeOut as TimeOut,clocks.status as Status,clocks.id')
+      clocks.timeIn as TimeIn, clocks.timeOut as TimeOut, clocks.hourIn as HourIn,clocks.hourOut as HourOut, clocks.status as Status,clocks.id')
   ->where('students.id',$id)->first();
        if(!$student){
         return response()->json(
@@ -49,69 +47,61 @@ class StudentController extends Controller
           'Full name'=> $student->fullName,
           'Gender'=> $student->Gender,
           'Email'=> $student->Email,
-          'Time In'=> $student->TimeIn,
-          'Time Out'=> $student->TimeOut,
+          'Date In'=> $student->TimeIn,
+          'Date Out'=> $student->TimeOut,
+          'Time In'=> Carbon::parse($student->HourIn)->format('H:i:s'),
+          'Time Out'=>Carbon::parse($student->HourOut)->format('H:i:s'),
           'Status'=> $student->Status == 1 ? 'Clocked' : 'Unclocked',
         ],200);
     }
 
 
     public function clockStudent($id){
-     
-            $checkStudent =Student::where('id',$id)->first();
+       $checkStudent =Student::where('id',$id)->first();
        if(!$checkStudent){
         return response()->json(
           ['error'=>'We cannot find your record in our database!!!'],401);
         }
-       
-       
-        $getClockedStudent = $this->getStudentById($id) ;
-      //  var_dump($getClockedStudent);
-      $dateDiff = '';
-        if($getClockedStudent){
-
-          $timeIN=Carbon::parse($getClockedStudent->timeIn);
-          $now = Carbon::now();
-           $this->$dateDiff=$now->diffInDays($timeIN);
-            // var_dump($dateDiff);
-          if($dateDiff > 1){
-            $this->clockMe($id);
-            $student = $this->getClockedInStudent($id);
-            return  response()->json([
-             'success'=>'You have successfully been clocked',
-             'Full name'=> $student->fullName,
-             'Gender'=> $student->Gender,
-             'Email'=> $student->Email,
-             'Time In'=> $student->TimeIn,
-             'Status'=> $student->Status == 1 ? 'Clocked' : 'Unclocked',
-           ],200);
-          }
-                 return response()->json([
-        'warning' => 'Sorry you can\'t clock twice per day, You have been clocked for today, Thanks!!',
-    ],401);
-      
-    }
-    if($getClockedStudent === null && $dateDiff < 1){
-      var_dump($dateDiff);
-        $this->clockMe($id);
-        $student = $this->getClockedInStudent($id);
-        return  response()->json([
-         'success'=>'You have successfully been clocked',
-         'Full name'=> $student->fullName,
-         'Gender'=> $student->Gender,
-         'Email'=> $student->Email,
-         'Time In'=> $student->TimeIn,
-         'Status'=> $student->Status == 1 ? 'Clocked' : 'Unclocked',
-       ],200);
-      }
-       
+        $getClockedStudent = $this->getStudentById($id);
     
+        if($getClockedStudent){
+        
+            return response()->json([
+              'warning' => 'Sorry you can\'t clock twice per day, You have been clocked out for today, Thanks!!',
+          ],401);
+    
+  }
+
+  $accessToClockInNotOk=Clock::where('studentId',$id)
+  ->where('status',0)
+  ->WhereNotNull('timeOut')
+  ->Where('timeIn','=',Carbon::today()->toDateString())
+  ->orderBy('timeIn','DESC')->first();
+
+if($accessToClockInNotOk){
+  return response()->json([
+    'warning' => 'Sorry you can\'t clock twice per day, You have been clocked out for today, Thanks!!',
+],401);
+}else{
+  $this->clockMe($id);
+  $student = $this->getClockedInStudent($id);
+  return  response()->json([
+   'success'=>'You have successfully been clocked',
+   'Full name'=> $student->fullName,
+   'Gender'=> $student->Gender,
+   'Email'=> $student->Email,
+   'Date In'=> $student->TimeIn,
+   'Time In'=>Carbon::parse($student->HourIn)->format('H:i:s'),
+   'Status'=> $student->Status == 1 ? 'Clocked' : 'Unclocked',
+ ],200);
+  }
 }
 
     public function clockMe($studentid){
       $clockStudent = new Clock();
-      $clockStudent->timeIn  = Carbon::now();
-      $clockStudent->timeOut  = null;
+      $clockStudent->timeIn  = Carbon::now()->format('Y-m-d');
+      $clockStudent->timeOut = null;
+      $clockStudent->hourIn  = Carbon::now();
       $clockStudent->status  =  1;
       $clockStudent->studentId  = $studentid;
       $clockStudent->save();
@@ -128,36 +118,51 @@ class StudentController extends Controller
           ->where('status',1)
           ->Where('timeOut',null)
           ->orderBy('timeIn','DESC')->first();
-          
+         
+            $accessToSignOut=Clock::where('studentId',$id)
+            ->where('status',1)
+            ->Where('timeOut',null)
+            ->Where('timeIn','<',Carbon::today()->toDateString())
+            ->orderBy('timeIn','DESC')->first();
+            
+            if($accessToSignOut){
+              return response()->json([
+                'warning' => 'Its Forbiden, You can\'t clock out at this time, It\'s late. Thanks!!',
+            ],401);
+            }else if($checkUnClockedStudent){
 
-          if($checkUnClockedStudent){
-          $updateclocks = Clock::where('studentId', $id)
-          ->update([
-            'timeOut' => Carbon::now(),
-            'status' => 0,
-          ]);
-
-              $student = $this->getClockedInStudent($id);
-              return  response()->json([
-               'success'=>'You have successfully been unclocked',
-               'Full name'=> $student->fullName,
-               'Gender'=> $student->Gender,
-               'Email'=> $student->Email,
-               'Time In'=> $student->TimeIn,
-               'Time Out'=> $student->TimeOut,
-               'Status'=> $student->Status == 1 ? 'Clocked' : 'Unclocked',
-             ],200);
-        }
-        return response()->json([
-          'warning' => 'You already  been clocked out for today, Thanks!!',
-      ],401);
-    }
-
+              $updateclocks = Clock::where('studentId', $id)
+              ->update([
+                'timeOut' => Carbon::today()->toDateString(),
+                'hourOut' => Carbon::now(),
+                'status' => 0,
+              ]);
+    
+                  $student = $this->getClockedInStudent($id);
+                  return  response()->json([
+                   'success'=>'You have successfully been unclocked',
+                   'Full name'=> $student->fullName,
+                   'Gender'=> $student->Gender,
+                   'Email'=> $student->Email,
+                   'Date In'=> $student->TimeIn,
+                   'Date Out'=> $student->TimeOut,
+                   'Time In'=>Carbon::parse($student->HourIn)->format('H:i:s'), //$student->hourIn,
+                   'Time Out'=>Carbon::parse($student->HourOut)->format('H:i:s'),// $student->hourOut,
+                   'Status'=> $student->Status == 1 ? 'Clocked' : 'Unclocked',
+                 ],200);
+            }
+            return response()->json([
+              'warning' => 'You already  been clocked out for today, Thanks!!',
+          ],401);
+            }
+      
+  
+  
 
     public function getClockedInStudent($id){
       $student = Student::join('clocks','students.id','=','clocks.studentId')
       ->selectRaw('students.name as fullName, students.gender as Gender,students.email as Email,
-      clocks.timeIn as TimeIn, clocks.timeOut as TimeOut,clocks.status as Status,clocks.id')
+      clocks.timeIn as TimeIn, clocks.hourIn as HourIn,clocks.hourOut as HourOut, clocks.timeOut as TimeOut,clocks.status as Status,clocks.id')
   ->where('clocks.studentId',$id)->first();
  return $student;
     }
@@ -165,7 +170,8 @@ class StudentController extends Controller
     public function getStudentById($id){
       $checkUnClockedStudent=Clock::where('studentId',$id)
           ->where('status',1)
-          ->where('timeOut',null)
+          ->whereNull('timeOut')
+          ->where('timeIn','=',Carbon::today()->format('Y-m-d'))
           ->orderBy('timeIn','DESC')->first();
           return $checkUnClockedStudent;
     }
@@ -181,7 +187,7 @@ class StudentController extends Controller
     public function allStudents(){
       $student=Student::join('clocks','students.id','=','clocks.studentId')
       ->selectRaw('students.name as fullName, students.gender as Gender,students.email as Email,
-      clocks.timeIn as TimeIn, clocks.timeOut as TimeOut,clocks.status as Status')
+      clocks.timeIn as TimeIn, clocks.timeOut as TimeOut, clocks.hourIn as HourIn, clocks.hourOut as HourOut, clocks.status as Status')
       ->orderBy('students.id','asc')->get();
       return $student;
     }
@@ -190,7 +196,7 @@ class StudentController extends Controller
     public function clockedStudents(){
       $clockedStudent=Student::join('clocks','students.id','=','clocks.studentId')
       ->selectRaw('students.name as fullName, students.gender as Gender,students.email as Email,
-      clocks.timeIn as TimeIn, clocks.timeOut as TimeOut,clocks.status as Status')
+      clocks.timeIn as TimeIn, clocks.timeOut as TimeOut,  clocks.hourIn as HourIn,clocks.hourOut as HourOut, clocks.status as Status')
       ->where('clocks.timeOut',null)
       ->orderBy('clocks.timeIn','asc')->get();
       return $clockedStudent;
@@ -199,7 +205,7 @@ class StudentController extends Controller
     public function allunclockedStudents(){
       $unclockedStudent=Student::join('clocks','students.id','=','clocks.studentId')
       ->selectRaw('students.name as fullName, students.gender as Gender,students.email as Email,
-      clocks.timeIn as TimeIn, clocks.timeOut as TimeOut,clocks.status as Status')
+      clocks.timeIn as TimeIn, clocks.timeOut as TimeOut,  clocks.hourIn as HourIn,clocks.hourOut as HourOut, clocks.status as Status')
       ->where('clocks.status',0)
       ->whereNotNull('clocks.timeOut')
       ->orderBy('clocks.timeOut','asc')->get();

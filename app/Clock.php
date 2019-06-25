@@ -9,4 +9,5 @@ class Clock extends Model
     protected $fillable = [
         'timeIn','timeOut', 'status','studentId',
    ];
+
 }

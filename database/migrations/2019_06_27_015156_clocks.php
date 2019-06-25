@@ -15,8 +15,10 @@ class Clocks extends Migration
     {
          Schema::create('clocks', function (Blueprint $table) {
             $table->bigIncrements('id');
-            $table->timestamp('timeIn')->nullable();
-            $table->timestamp('timeOut')->nullable();
+            $table->date('timeIn')->nullable();
+            $table->date('timeOut')->nullable();
+            $table->timestamp('hourIn')->nullable();
+            $table->timestamp('hourOut')->nullable();
             $table->boolean('status')->default(1);
              $table->unsignedBigInteger('studentId');
             $table->foreign('studentId')->references('id')->on('students');
@@ -25,6 +27,7 @@ class Clocks extends Migration
         });
     }
 
+    
     /**
      * Reverse the migrations.
      *
