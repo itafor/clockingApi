@@ -38,8 +38,10 @@ class StudentController extends Controller
       $student = Student::join('clocks','students.id','=','clocks.studentId')
       ->selectRaw('students.name as fullName, students.gender as Gender,students.email as Email,
       clocks.timeIn as TimeIn, clocks.timeOut as TimeOut, clocks.hourIn as HourIn,clocks.hourOut as HourOut, clocks.status as Status,clocks.id')
-  ->where('students.id',$id)->first();
-       if(!$student){
+        ->where('students.id',$id)
+        ->orderBy('timeIn','DESC')->first();
+      
+        if(!$student){
         return response()->json(
           ['error'=>'We cannot find your record in our database!!!'],401);
         }
@@ -116,8 +118,10 @@ if($accessToClockInNotOk){
 
           $checkUnClockedStudent=Clock::where('studentId',$id)
           ->where('status',1)
-          ->Where('timeOut',null)
-          ->orderBy('timeIn','DESC')->first();
+          ->Where('timeIn','=',Carbon::today()->toDateString())
+          ->WhereNull('timeOut')
+          ->WhereNull('hourOut')
+          ->orderBy('studentId','DESC')->first();
          
             $accessToSignOut=Clock::where('studentId',$id)
             ->where('status',1)
@@ -132,9 +136,14 @@ if($accessToClockInNotOk){
             }else if($checkUnClockedStudent){
 
               $updateclocks = Clock::where('studentId', $id)
+              ->where('status',1)
+          ->Where('timeIn','=',Carbon::today()->toDateString())
+          ->WhereNull('timeOut')
+          ->WhereNull('hourOut')
+          ->orderBy('studentId','DESC')->first()
               ->update([
+                'hourOut' => Carbon::today()->toDateString(),
                 'timeOut' => Carbon::today()->toDateString(),
-                'hourOut' => Carbon::now(),
                 'status' => 0,
               ]);
     
